@@ -10,6 +10,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Needed so the job can create a Release and upload the APK to it.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
