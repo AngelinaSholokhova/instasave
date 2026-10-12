@@ -13,7 +13,11 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,8 +74,9 @@ private suspend fun loadThumb(url: String): Bitmap? = withContext(Dispatchers.IO
  */
 @Composable
 fun Thumb(url: String?, modifier: Modifier = Modifier) {
-    val state = produceState<Bitmap?>(initialValue = null, key1 = url) {
-        value = url?.takeIf { it.isNotBlank() }?.let { loadThumb(it) }
+    var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(url) {
+        bitmap = if (url.isNullOrBlank()) null else loadThumb(url)
     }
     Box(
         modifier = modifier
@@ -80,7 +85,7 @@ fun Thumb(url: String?, modifier: Modifier = Modifier) {
             .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center,
     ) {
-        val bmp = state.value
+        val bmp = bitmap
         if (bmp != null) {
             Image(
                 bitmap = bmp.asImageBitmap(),

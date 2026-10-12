@@ -71,7 +71,17 @@ class DevProbeActivity : ComponentActivity() {
             val dl = com.instasave.app.download.Downloader()
             dl.download(first.url, dest)
             val size = dest.length()
-            val bytes = dest.inputStream().use { it.readNBytes(16) }
+            // readNBytes() needs API 33, so the header is read manually.
+            val bytes = dest.inputStream().use { ins ->
+                val buf = ByteArray(16)
+                var off = 0
+                while (off < buf.size) {
+                    val n = ins.read(buf, off, buf.size - off)
+                    if (n < 0) break
+                    off += n
+                }
+                buf.copyOf(off)
+            }
             val mp4 = bytes.size >= 12 && String(bytes, 4, 4, Charsets.US_ASCII) == "ftyp"
             val uri = com.instasave.app.gallery.GallerySaver(this).save(dest, "InstaSave_$code.mp4")
             val view: android.content.pm.ResolveInfo? = try {

@@ -16,7 +16,8 @@ object Shortcode {
             if (v < 0) return null
             res = res.multiply(base).add(BigInteger.valueOf(v.toLong()))
         }
-        return runCatching { res.longValueExact() }.getOrNull()
+        // longValueExact() needs API 31, so the overflow check is done manually.
+        return if (res.bitLength() > 63) null else res.toLong()
     }
 
     /** Converts a numeric media id (pk) back to a shortcode. */
