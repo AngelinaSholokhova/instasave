@@ -218,6 +218,41 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) { history.clear() }
     }
 
+    /** Re-runs a failed task: downloads again when the URL is known, otherwise re-resolves the post. */
+    fun retry(taskId: Long) {
+        val task = _state.value.tasks.firstOrNull { it.id == taskId } ?: return
+        if (task.status != TaskStatus.ERROR) return
+        jobs.remove(taskId)
+        if (task.url.isNotBlank()) {
+            val next = task.copy(status = TaskStatus.DOWNLOADING, error = null, progress = 0f)
+            patchTask(taskId) { next }
+            downloadOne(next)
+        } else {
+            patchTask(taskId) { it.copy(status = TaskStatus.RESOLVING, error = null, progress = 0f) }
+            jobs[taskId] = viewModelScope.launch {
+                runCatching {
+                    val media = withContext(Dispatchers.IO) { api.resolve(task.shortcode) }
+                    processMedia(taskId, task.shortcode, media)
+                }.onFailure { t ->
+                    if (t !is CancellationException) {
+                        patchTask(taskId) { it.copy(status = TaskStatus.ERROR, error = messageOf(t)) }
+                    }
+                }
+            }
+        }
+    }
+
+    /** Drops one row from the list and its record from the history (the video file stays in the gallery). */
+    fun removeTaskEntry(task: TaskItem) {
+        jobs.remove(task.id)?.cancel()
+        _state.update { s -> s.copy(tasks = s.tasks.filterNot { it.id == task.id }) }
+        if (task.shortcode.isNotBlank()) downloadedShortcodes.remove(task.shortcode)
+        if (task.fileName.isNotBlank()) {
+            viewModelScope.launch(Dispatchers.IO) { history.remove(task.fileName) }
+        }
+        showSnackbar("Запись удалена из истории")
+    }
+
     fun snackbarShown() {
         _state.update { it.copy(snackbar = null) }
     }

@@ -53,6 +53,12 @@ class HistoryStore(context: Context) {
         prefs.edit().remove(key).apply()
     }
 
+    /** Removes a single entry (by file name) without touching the rest of the history. */
+    fun remove(fileName: String) {
+        if (fileName.isBlank()) return
+        store(load().filterNot { it.fileName == fileName })
+    }
+
     /** True if an entry for [shortcode] exists and its file is still in the gallery. */
     fun containsShortcode(shortcode: String): Boolean {
         if (shortcode.isBlank()) return false

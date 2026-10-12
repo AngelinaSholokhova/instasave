@@ -4,23 +4,29 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- subtle background circle -->
+
+    <!-- soft glass disc -->
+    <path
+        android:fillAlpha="0.18"
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,54 m-31,0 a31,31 0 1,1 62,0 a31,31 0 1,1 -62,0" />
+
+    <!-- thin ring -->
+    <path
+        android:pathData="M54,54 m-31,0 a31,31 0 1,1 62,0 a31,31 0 1,1 -62,0"
+        android:strokeAlpha="0.45"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3" />
+
+    <!-- download arrow -->
     <path
         android:fillColor="#FFFFFF"
-        android:fillAlpha="0.10"
-        android:pathData="M54,54m-30,0a30,30 0,1 1,60 0a30,30 0,1 1,-60 0" />
-    <!-- down arrow onto tray -->
+        android:pathData="M54,68 L69,50 L60.5,50 L60.5,32 L47.5,32 L47.5,50 L39,50 Z" />
+
+    <!-- landing bar -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,33 L54,55 M44,45 L54,55 L64,45"
+        android:pathData="M38,74 L70,74"
         android:strokeColor="#FFFFFF"
-        android:strokeWidth="4"
         android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="4"
-        android:strokeLineCap="round"
-        android:pathData="M36,62 L72,62 L72,68 A4,4 0 0 1 68,72 L40,72 A4,4 0 0 1 36,68 Z" />
+        android:strokeWidth="5" />
 </vector>

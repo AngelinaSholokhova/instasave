@@ -3,7 +3,10 @@ package com.instasave.app.ui
 import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
+import android.widget.MediaController
 import android.widget.Toast
+import android.widget.VideoView
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +32,7 @@ import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -45,11 +49,15 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -57,7 +65,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.instasave.app.util.ReportSender
 
 @Composable
 fun HomeScreen(viewModel: AppViewModel) {
@@ -97,7 +108,7 @@ fun HomeScreen(viewModel: AppViewModel) {
             }
             Spacer(Modifier.height(4.dp))
             Text(
-                "Вставьте ссылку на публичный Reel или видео-пост Instagram",
+                "Вставьте ссылку на публичный Reels или видео-пост Instagram",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -153,6 +164,11 @@ fun HomeScreen(viewModel: AppViewModel) {
                             task,
                             viewModel::cancel,
                             onOpen = { openInGallery(context, it) },
+                            onRetry = { viewModel.retry(it.id) },
+                            onDelete = viewModel::removeTaskEntry,
+                            onReport = { t ->
+                                ReportSender.send(context, t.shortcode, t.error)
+                            },
                             folderName = state.folderName,
                         )
                     }
@@ -177,7 +193,7 @@ private fun LinkInput(
         value = value,
         onValueChange = onValueChange,
         modifier = Modifier.fillMaxWidth(),
-        label = { Text("Ссылка на Reel или пост") },
+        label = { Text("Ссылка на Reels или пост") },
         placeholder = { Text("https://www.instagram.com/reel/...") },
         singleLine = true,
         shape = RoundedCornerShape(12.dp),
@@ -274,8 +290,17 @@ private fun TaskRow(
     task: TaskItem,
     onCancel: (Long) -> Unit,
     onOpen: (TaskItem) -> Unit,
+    onRetry: (TaskItem) -> Unit,
+    onDelete: (TaskItem) -> Unit,
+    onReport: (TaskItem) -> Unit,
     folderName: String = "InstaSave",
 ) {
+    var previewing by remember { mutableStateOf(false) }
+    val previewUri = task.uri
+    if (previewing && !previewUri.isNullOrBlank()) {
+        VideoPreviewDialog(uri = previewUri, onDismiss = { previewing = false })
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -284,7 +309,16 @@ private fun TaskRow(
     ) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Thumb(task.thumbnail)
+                Box(
+                    Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(
+                            enabled = task.status == TaskStatus.DONE && !previewUri.isNullOrBlank(),
+                        ) { previewing = true },
+                ) {
+                    Thumb(task.thumbnail)
+                }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
@@ -357,16 +391,20 @@ private fun TaskRow(
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFF2E9E5B),
                     )
-                    if (task.createdAt > 0L) {
-                        val dateText = remember(task.createdAt) {
-                            java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", java.util.Locale("ru"))
-                                .format(java.util.Date(task.createdAt))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (task.createdAt > 0L) {
+                            val dateText = remember(task.createdAt) {
+                                java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", java.util.Locale("ru"))
+                                    .format(java.util.Date(task.createdAt))
+                            }
+                            Text(
+                                dateText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
                         }
-                        Text(
-                            dateText,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
+                        Spacer(Modifier.weight(1f))
+                        TextButton(onClick = { onDelete(task) }) { Text("Удалить") }
                     }
                 }
                 TaskStatus.ERROR -> {
@@ -376,7 +414,75 @@ private fun TaskRow(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { onRetry(task) }) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("Повторить")
+                        }
+                        TextButton(onClick = { onReport(task) }) { Text("Отчёт об ошибке") }
+                    }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Plays the saved file in a dialog so the result can be checked without leaving the app.
+ */
+@Composable
+private fun VideoPreviewDialog(uri: String, onDismiss: () -> Unit) {
+    var videoView by remember { mutableStateOf<VideoView?>(null) }
+    var controller by remember { mutableStateOf<MediaController?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            videoView?.stopPlayback()
+            controller?.hide()
+            videoView = null
+            controller = null
+        }
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color.Black),
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    VideoView(ctx).apply { videoView = this }.also { v ->
+                        val media = MediaController(ctx)
+                        controller = media
+                        media.setAnchorView(v)
+                        v.setMediaController(media)
+                        v.setVideoURI(Uri.parse(uri))
+                        v.setOnPreparedListener { mp ->
+                            mp.isLooping = true
+                            v.start()
+                        }
+                        v.setOnErrorListener { _, _, _ -> true }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(260.dp),
+            )
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onDismiss) { Text("Закрыть", color = Color.White) }
             }
         }
     }
