@@ -1,5 +1,6 @@
 package com.instasave.app.ui
 
+import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -164,6 +166,7 @@ fun HomeScreen(viewModel: AppViewModel) {
                             task,
                             viewModel::cancel,
                             onOpen = { openInGallery(context, it) },
+                            onShare = { shareVideo(context, it) },
                             onRetry = { viewModel.retry(it.id) },
                             onDelete = viewModel::removeTaskEntry,
                             onReport = { t ->
@@ -284,12 +287,39 @@ private fun openInGallery(context: android.content.Context, task: TaskItem) {
     }
 }
 
+/**
+ * Opens the system share sheet so the saved file can be forwarded to a messenger
+ * without leaving the app. The URI goes through ClipData so the target app actually
+ * receives read permission (EXTRA_STREAM alone does not grant it).
+ */
+private fun shareVideo(context: android.content.Context, task: TaskItem) {
+    val uriText = task.uri
+    if (uriText.isNullOrBlank()) {
+        Toast.makeText(context, "Видео ещё не сохранено", Toast.LENGTH_SHORT).show()
+        return
+    }
+    val uri = Uri.parse(uriText)
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "video/mp4"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        putExtra(Intent.EXTRA_SUBJECT, task.fileName)
+        clipData = ClipData.newRawUri("video", uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    try {
+        context.startActivity(Intent.createChooser(send, "Поделиться видео"))
+    } catch (e: Exception) {
+        Toast.makeText(context, "Нет приложений для отправки", Toast.LENGTH_SHORT).show()
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TaskRow(
     task: TaskItem,
     onCancel: (Long) -> Unit,
     onOpen: (TaskItem) -> Unit,
+    onShare: (TaskItem) -> Unit,
     onRetry: (TaskItem) -> Unit,
     onDelete: (TaskItem) -> Unit,
     onReport: (TaskItem) -> Unit,
@@ -391,20 +421,31 @@ private fun TaskRow(
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFF2E9E5B),
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (task.createdAt > 0L) {
-                            val dateText = remember(task.createdAt) {
-                                java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", java.util.Locale("ru"))
-                                    .format(java.util.Date(task.createdAt))
-                            }
-                            Text(
-                                dateText,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.outline,
-                            )
+                    if (task.createdAt > 0L) {
+                        val dateText = remember(task.createdAt) {
+                            java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", java.util.Locale("ru"))
+                                .format(java.util.Date(task.createdAt))
                         }
-                        Spacer(Modifier.weight(1f))
-                        TextButton(onClick = { onDelete(task) }) { Text("Удалить") }
+                        Text(
+                            dateText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    }
+                    if (!previewUri.isNullOrBlank()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(onClick = { onShare(task) }) {
+                                Icon(
+                                    Icons.Default.Share,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text("Поделиться")
+                            }
+                            Spacer(Modifier.weight(1f))
+                            TextButton(onClick = { onDelete(task) }) { Text("Удалить") }
+                        }
                     }
                 }
                 TaskStatus.ERROR -> {

@@ -21,8 +21,8 @@ android {
         applicationId = "com.instasave.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
 
         // GitHub repo used by the in-app update check.
         buildConfigField("String", "UPDATE_REPO", "\"AngelinaSholokhova/instasave\"")
